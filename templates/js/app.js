@@ -1,23 +1,48 @@
 
-function set(x, y, col) {
-  unset(x, y);
-  var cellWidth = $(document).width() / {{.width}};
-	var cellHeight = $(document).height() / {{.height}};
-  var bit = $('<div></div>');
-	bit.addClass('pos' + x + '-' + y);
-	bit.css('position', 'absolute');
-	bit.css('left', '' + (cellWidth * x) + 'px');
-	bit.css('width', '' + cellWidth + 'px');
-	bit.css('height', '' + cellHeight + 'px');
-	bit.css('top', '' + (cellHeight * y) + 'px');
-	bit.css('background-color', col);
-	$('body').append(bit);
+function set(ctx, x, y, col) {
+	ctx.fillStyle = "black";
+	ctx.fillRect(x, y, 1, 1);
 };
 
-function unset(x, y) {
+function unset(ctx, x, y) {
   $('.pos' + x + '-' + y).remove();
 };
 
 $(function() {
+	var canvas = document.getElementById("board");
+	canvas.width = {{.width}};
+	canvas.height = {{.height}};
+	var ctx = canvas.getContext("2d");
+	
+	var socket = new WebSocket("ws://" + window.location.host + "/ws/view");
+	socket.onerror = function(ev) {
+	  console.log(ev);
+	};
+	socket.onopen = function(ev) {
+	  console.log("Socket opened");
+	};
+	socket.onclose = function(ev) {
+	  console.log("Socket closed");
+	};
+	socket.onmessage = function(ev) {
+		var obj = JSON.parse(ev.data);
+		if (obj.Created && obj.Removed) {
+			for (var pos in obj.Created) {
+				var xy = pos.split("-");
+				set(ctx, parseInt(xy[0]), parseInt(xy[1]), 'black');
+			}
+			for (var pos in obj.Removed) {
+				var xy = pos.split("-");
+				unset(ctx, parseInt(xy[0]), parseInt(xy[1]));
+			}
+		} else {
+		  for (var mold in obj.Molds) {
+			  for (var pos in obj.Molds[mold].Bits) {
+					var xy = pos.split("-");
+					set(ctx, parseInt(xy[0]), parseInt(xy[1]), 'black');
+				}
+			}
+		}
+	};
 });
 
