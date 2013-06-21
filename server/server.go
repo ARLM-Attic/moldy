@@ -31,6 +31,7 @@ func index(w http.ResponseWriter, r *http.Request) {
 
 func js(w http.ResponseWriter, r *http.Request) {
 	or500(w, jsTemplates.ExecuteTemplate(w, "jquery-1.8.1.min.js", nil))
+	or500(w, jsTemplates.ExecuteTemplate(w, "murmurhash3_gc.js", nil))
 	or500(w, jsTemplates.ExecuteTemplate(w, "app.js", map[string]interface{}{
 		"width":  width,
 		"height": height,

@@ -1,11 +1,24 @@
 
+String.prototype.colorize = function() {
+	var hash = murmurhash3_32_gc(this, 1);
+	rval = "#";
+	rval += (((hash & 0xff) >> 1) + 128).toString(16);
+	if (rval.length < 3) rval += "0"; 
+	rval += (((hash & 0xff00) >> 9) + 128).toString(16);
+	if (rval.length < 5) rval += "0";
+	rval += (((hash & 0xff0000) >> 17) + 128).toString(16);
+	if (rval.length < 7) rval += "0";
+	return rval;
+};
+
 function set(ctx, x, y, col) {
-	ctx.fillStyle = "black";
+	ctx.fillStyle = col;
 	ctx.fillRect(x, y, 1, 1);
 };
 
 function unset(ctx, x, y) {
-  $('.pos' + x + '-' + y).remove();
+	ctx.fillStyle = "white";
+	ctx.fillRect(x, y, 1, 1);
 };
 
 $(function() {
@@ -29,7 +42,7 @@ $(function() {
 		if (obj.Created && obj.Removed) {
 			for (var pos in obj.Created) {
 				var xy = pos.split("-");
-				set(ctx, parseInt(xy[0]), parseInt(xy[1]), 'black');
+				set(ctx, parseInt(xy[0]), parseInt(xy[1]), obj.Created[pos].colorize());
 			}
 			for (var pos in obj.Removed) {
 				var xy = pos.split("-");
@@ -39,7 +52,7 @@ $(function() {
 		  for (var mold in obj.Molds) {
 			  for (var pos in obj.Molds[mold].Bits) {
 					var xy = pos.split("-");
-					set(ctx, parseInt(xy[0]), parseInt(xy[1]), 'black');
+					set(ctx, parseInt(xy[0]), parseInt(xy[1]), mold.colorize());
 				}
 			}
 		}
