@@ -166,7 +166,16 @@ func New(width, height, maxMoldSize uint16) CmdChan {
 		cmd:         make(CmdChan),
 		subscribers: make(map[*Subscriber]bool),
 	}
-	w.newMold("test")
+	w.newMold("test1")
+	w.newMold("test2")
+	w.newMold("test3")
+	w.newMold("test4")
+	w.newMold("test5")
+	w.newMold("test6")
+	w.newMold("test7")
+	w.newMold("test8")
+	w.newMold("test9")
+	w.newMold("test10")
 	go w.mainLoop()
 	return w.cmd
 }
