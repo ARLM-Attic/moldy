@@ -2,11 +2,11 @@
 String.prototype.colorize = function() {
 	var hash = murmurhash3_32_gc(this, 1);
 	rval = "#";
-	rval += (((hash & 0xff) >> 1) + 128).toString(16);
+	rval += (hash & 0xff).toString(16);
 	if (rval.length < 3) rval += "0"; 
-	rval += (((hash & 0xff00) >> 9) + 128).toString(16);
+	rval += ((hash & 0xff00) >> 8).toString(16);
 	if (rval.length < 5) rval += "0";
-	rval += (((hash & 0xff0000) >> 17) + 128).toString(16);
+	rval += ((hash & 0xff0000) >> 16).toString(16);
 	if (rval.length < 7) rval += "0";
 	return rval;
 };

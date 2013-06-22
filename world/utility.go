@@ -10,7 +10,7 @@ type pos struct {
 	Y uint16
 }
 
-func (self pos) eachNeighbour(w *world, f func(p pos) bool) {
+func (self pos) eachNeighbour(dim pos, f func(p pos) bool) {
 	nx := 0
 	ny := 0
 	np := pos{}
@@ -19,7 +19,7 @@ func (self pos) eachNeighbour(w *world, f func(p pos) bool) {
 			if xd != 0 || yd != 0 {
 				nx = int(self.X) + xd
 				ny = int(self.Y) + yd
-				if nx >= 0 && nx < int(w.Width) && ny >= 0 && ny < int(w.Height) {
+				if nx >= 0 && nx < int(dim.X) && ny >= 0 && ny < int(dim.Y) {
 					np.X = uint16(nx)
 					np.Y = uint16(ny)
 					if f(np) {

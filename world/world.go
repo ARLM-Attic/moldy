@@ -52,10 +52,12 @@ type cmd struct {
 }
 
 type mold struct {
-	world *world
-	Name  string
-	Bits  posBoolMap
-	roomy posBoolMap
+	world      *world
+	Name       string
+	Bits       posBoolMap
+	roomy      posBoolMap
+	threatened map[pos]uint8
+	power      map[pos]uint8
 }
 
 func (self *mold) size() uint16 {
@@ -65,6 +67,14 @@ func (self *mold) size() uint16 {
 func (self *mold) set(p pos) {
 	if _, found := self.Bits[p]; !found {
 		self.Bits[p] = true
+		self.threatened[p] = 0
+		p.eachNeighbour(self.world.Dimensions, func(p2 pos) bool {
+			self.power[p2]++
+			if self.world.owner(p) != self.Name {
+				self.threatened[p]++
+			}
+			return false
+		})
 		self.world.set(p, self.Name)
 		if self.world.hasSpace(p) {
 			self.roomy[p] = true
@@ -84,10 +94,35 @@ func (self *mold) space(p pos) {
 	}
 }
 
+func (self *mold) threaten(p pos) {
+	if self.Bits[p] {
+		self.threatened[p]++
+	}
+}
+
+func (self *mold) secure(p pos) {
+	if pow, found := self.threatened[p]; found {
+		if pow == 1 {
+			delete(self.threatened, p)
+		} else {
+			self.threatened[p] = pow - 1
+		}
+	}
+}
+
+func (self *mold) pow(p pos) uint8 {
+	return self.power[p]
+}
+
 func (self *mold) unset(p pos) {
 	if _, found := self.Bits[p]; found {
 		delete(self.Bits, p)
+		p.eachNeighbour(self.world.Dimensions, func(p2 pos) bool {
+			self.power[p2]--
+			return false
+		})
 		delete(self.roomy, p)
+		delete(self.threatened, p)
 		self.world.unset(p)
 	} else {
 		panic(fmt.Errorf("Tried to unset %v in %v, but it was never set", p, self.Name))
@@ -100,7 +135,7 @@ func (self *mold) get(p pos) bool {
 
 func (self *mold) grow(delta *Delta) {
 	for bit, _ := range self.roomy {
-		bit.eachNeighbour(self.world, func(neigh pos) bool {
+		bit.eachNeighbour(self.world.Dimensions, func(neigh pos) bool {
 			if !self.world.hasMold(neigh) {
 				delta.Created[neigh] = self.Name
 				self.set(neigh)
@@ -113,8 +148,7 @@ func (self *mold) grow(delta *Delta) {
 }
 
 type world struct {
-	Width       uint16
-	Height      uint16
+	Dimensions  pos
 	Molds       map[string]*mold
 	MaxMoldSize uint16
 	neighbours  map[pos]uint8
@@ -126,15 +160,14 @@ type world struct {
 func New(width, height, maxMoldSize uint16) CmdChan {
 	w := &world{
 		Molds:       make(map[string]*mold),
-		Width:       width,
-		Height:      height,
+		Dimensions:  pos{width, height},
 		MaxMoldSize: maxMoldSize,
 		neighbours:  make(map[pos]uint8),
 		moldBits:    make(map[pos]string),
 		cmd:         make(CmdChan),
 		subscribers: make(map[*Subscriber]bool),
 	}
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 100; i++ {
 		w.newMold(fmt.Sprintf("test%v", i))
 	}
 	go w.mainLoop()
@@ -145,10 +178,19 @@ func (self *world) hasSpace(p pos) bool {
 	return self.neighbours[p] < 8
 }
 
+func (self *world) owner(p pos) string {
+	return self.moldBits[p]
+}
+
 func (self *world) set(p pos, name string) {
 	if n, found := self.moldBits[p]; !found {
 		self.moldBits[p] = name
-		p.eachNeighbour(self, func(p2 pos) bool {
+		p.eachNeighbour(self.Dimensions, func(p2 pos) bool {
+			for _, mold := range self.Molds {
+				if mold.Name != name {
+					mold.threaten(p2)
+				}
+			}
 			self.neighbours[p2]++
 			if self.neighbours[p2] > 7 {
 				for _, mold := range self.Molds {
@@ -163,9 +205,14 @@ func (self *world) set(p pos, name string) {
 }
 
 func (self *world) unset(p pos) {
-	if _, found := self.moldBits[p]; found {
+	if owner, found := self.moldBits[p]; found {
 		delete(self.moldBits, p)
-		p.eachNeighbour(self, func(p2 pos) bool {
+		p.eachNeighbour(self.Dimensions, func(p2 pos) bool {
+			for _, mold := range self.Molds {
+				if mold.Name != owner {
+					mold.secure(p2)
+				}
+			}
 			if self.neighbours[p2] == 8 {
 				for _, mold := range self.Molds {
 					mold.space(p2)
@@ -185,15 +232,17 @@ func (self *world) hasMold(p pos) (result bool) {
 }
 
 func (self *world) newMold(name string) {
-	p := pos{uint16(rand.Int()) % self.Width, uint16(rand.Int()) % self.Height}
+	p := pos{uint16(rand.Int()) % self.Dimensions.X, uint16(rand.Int()) % self.Dimensions.Y}
 	for self.hasMold(p) {
-		p = pos{uint16(rand.Int()) % self.Width, uint16(rand.Int()) % self.Height}
+		p = pos{uint16(rand.Int()) % self.Dimensions.X, uint16(rand.Int()) % self.Dimensions.Y}
 	}
 	m := &mold{
-		world: self,
-		Bits:  make(posBoolMap),
-		Name:  name,
-		roomy: make(posBoolMap),
+		world:      self,
+		Bits:       make(posBoolMap),
+		Name:       name,
+		roomy:      make(posBoolMap),
+		threatened: make(map[pos]uint8),
+		power:      make(map[pos]uint8),
 	}
 	m.set(p)
 	self.Molds[name] = m
