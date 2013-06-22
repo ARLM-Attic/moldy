@@ -67,8 +67,7 @@ type pos struct {
 	Y uint16
 }
 
-func (self pos) neighbours(w *world) (result []pos) {
-	result = make([]pos, 0, 8)
+func (self pos) eachNeighbour(w *world, f func(p pos) bool) {
 	nx := 0
 	ny := 0
 	for xd := -1; xd < 2; xd++ {
@@ -77,7 +76,9 @@ func (self pos) neighbours(w *world) (result []pos) {
 				nx = int(self.X) + xd
 				ny = int(self.Y) + yd
 				if nx >= 0 && nx < int(w.Width) && ny >= 0 && ny < int(w.Height) {
-					result = append(result, pos{uint16(nx), uint16(ny)})
+					if f(pos{uint16(nx), uint16(ny)}) {
+						return
+					}
 				}
 			}
 		}
@@ -106,11 +107,21 @@ func (self *mold) size() uint16 {
 }
 
 func (self *mold) set(p pos) {
-	self.Bits[p] = true
+	if _, found := self.Bits[p]; !found {
+		self.Bits[p] = true
+		self.world.set(p, self.Name)
+	} else {
+		panic(fmt.Errorf("Tried to set %v in %v, but it was already set", p, self.Name))
+	}
 }
 
 func (self *mold) unset(p pos) {
-	delete(self.Bits, p)
+	if _, found := self.Bits[p]; found {
+		delete(self.Bits, p)
+		self.world.unset(p)
+	} else {
+		panic(fmt.Errorf("Tried to unset %v in %v, but it was never set", p, self.Name))
+	}
 }
 
 func (self *mold) get(p pos) bool {
@@ -118,15 +129,17 @@ func (self *mold) get(p pos) bool {
 }
 
 func (self *mold) grow(delta *Delta) {
-	n := rand.Int() % len(self.Bits)
 	for bit, _ := range self.Bits {
-		n--
-		for _, neigh := range bit.neighbours(self.world) {
-			if n < 0 && !self.world.hasMold(neigh) {
-				delta.Created[neigh] = self.Name
-				self.Bits[neigh] = true
-				return
-			}
+		if self.world.hasSpace(bit) {
+			bit.eachNeighbour(self.world, func(neigh pos) bool {
+				if !self.world.hasMold(neigh) {
+					delta.Created[neigh] = self.Name
+					self.set(neigh)
+					return true
+				}
+				return false
+			})
+			break
 		}
 	}
 }
@@ -136,6 +149,8 @@ type world struct {
 	Height      uint16
 	Molds       map[string]*mold
 	MaxMoldSize uint16
+	neighbours  map[pos]uint8
+	moldBits    map[pos]string
 	cmd         CmdChan
 	subscribers map[*Subscriber]bool
 }
@@ -146,6 +161,8 @@ func New(width, height, maxMoldSize uint16) CmdChan {
 		Width:       width,
 		Height:      height,
 		MaxMoldSize: maxMoldSize,
+		neighbours:  make(map[pos]uint8),
+		moldBits:    make(map[pos]string),
 		cmd:         make(CmdChan),
 		subscribers: make(map[*Subscriber]bool),
 	}
@@ -154,13 +171,37 @@ func New(width, height, maxMoldSize uint16) CmdChan {
 	return w.cmd
 }
 
-func (self *world) hasMold(p pos) bool {
-	for _, mold := range self.Molds {
-		if mold.get(p) {
-			return true
-		}
+func (self *world) hasSpace(p pos) bool {
+	return self.neighbours[p] < 8
+}
+
+func (self *world) set(p pos, name string) {
+	if n, found := self.moldBits[p]; !found {
+		self.moldBits[p] = name
+		p.eachNeighbour(self, func(p2 pos) bool {
+			self.neighbours[p2]++
+			return false
+		})
+	} else {
+		panic(fmt.Errorf("Tried to set %v which was already occupied by %v", p, n))
 	}
-	return false
+}
+
+func (self *world) unset(p pos) {
+	if _, found := self.moldBits[p]; found {
+		delete(self.moldBits, p)
+		p.eachNeighbour(self, func(p2 pos) bool {
+			self.neighbours[p2]--
+			return false
+		})
+	} else {
+		panic(fmt.Errorf("Tried to unset %v which was not occupied by anyone", p))
+	}
+}
+
+func (self *world) hasMold(p pos) (result bool) {
+	_, result = self.moldBits[p]
+	return
 }
 
 func (self *world) newMold(name string) {
@@ -170,7 +211,7 @@ func (self *world) newMold(name string) {
 	}
 	m := &mold{
 		world: self,
-		Bits:  make(map[pos]bool),
+		Bits:  make(posBoolMap),
 		Name:  name,
 	}
 	m.set(p)
