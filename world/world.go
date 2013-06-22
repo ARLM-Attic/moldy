@@ -100,6 +100,7 @@ type mold struct {
 	world *world
 	Name  string
 	Bits  posBoolMap
+	roomy posBoolMap
 }
 
 func (self *mold) size() uint16 {
@@ -110,14 +111,28 @@ func (self *mold) set(p pos) {
 	if _, found := self.Bits[p]; !found {
 		self.Bits[p] = true
 		self.world.set(p, self.Name)
+		if self.world.hasSpace(p) {
+			self.roomy[p] = true
+		}
 	} else {
 		panic(fmt.Errorf("Tried to set %v in %v, but it was already set", p, self.Name))
+	}
+}
+
+func (self *mold) noSpace(p pos) {
+	delete(self.roomy, p)
+}
+
+func (self *mold) space(p pos) {
+	if self.Bits[p] {
+		self.roomy[p] = true
 	}
 }
 
 func (self *mold) unset(p pos) {
 	if _, found := self.Bits[p]; found {
 		delete(self.Bits, p)
+		delete(self.roomy, p)
 		self.world.unset(p)
 	} else {
 		panic(fmt.Errorf("Tried to unset %v in %v, but it was never set", p, self.Name))
@@ -129,18 +144,16 @@ func (self *mold) get(p pos) bool {
 }
 
 func (self *mold) grow(delta *Delta) {
-	for bit, _ := range self.Bits {
-		if self.world.hasSpace(bit) {
-			bit.eachNeighbour(self.world, func(neigh pos) bool {
-				if !self.world.hasMold(neigh) {
-					delta.Created[neigh] = self.Name
-					self.set(neigh)
-					return true
-				}
-				return false
-			})
-			break
-		}
+	for bit, _ := range self.roomy {
+		bit.eachNeighbour(self.world, func(neigh pos) bool {
+			if !self.world.hasMold(neigh) {
+				delta.Created[neigh] = self.Name
+				self.set(neigh)
+				return true
+			}
+			return false
+		})
+		break
 	}
 }
 
@@ -166,16 +179,9 @@ func New(width, height, maxMoldSize uint16) CmdChan {
 		cmd:         make(CmdChan),
 		subscribers: make(map[*Subscriber]bool),
 	}
-	w.newMold("test1")
-	w.newMold("test2")
-	w.newMold("test3")
-	w.newMold("test4")
-	w.newMold("test5")
-	w.newMold("test6")
-	w.newMold("test7")
-	w.newMold("test8")
-	w.newMold("test9")
-	w.newMold("test10")
+	for i := 0; i < 200; i++ {
+		w.newMold(fmt.Sprintf("test%v", i))
+	}
 	go w.mainLoop()
 	return w.cmd
 }
@@ -189,6 +195,11 @@ func (self *world) set(p pos, name string) {
 		self.moldBits[p] = name
 		p.eachNeighbour(self, func(p2 pos) bool {
 			self.neighbours[p2]++
+			if self.neighbours[p2] > 7 {
+				for _, mold := range self.Molds {
+					mold.noSpace(p2)
+				}
+			}
 			return false
 		})
 	} else {
@@ -200,6 +211,11 @@ func (self *world) unset(p pos) {
 	if _, found := self.moldBits[p]; found {
 		delete(self.moldBits, p)
 		p.eachNeighbour(self, func(p2 pos) bool {
+			if self.neighbours[p2] == 8 {
+				for _, mold := range self.Molds {
+					mold.space(p2)
+				}
+			}
 			self.neighbours[p2]--
 			return false
 		})
@@ -222,6 +238,7 @@ func (self *world) newMold(name string) {
 		world: self,
 		Bits:  make(posBoolMap),
 		Name:  name,
+		roomy: make(posBoolMap),
 	}
 	m.set(p)
 	self.Molds[name] = m
