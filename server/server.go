@@ -16,7 +16,7 @@ const (
 var htmlTemplates = template.Must(template.New("htmlTemplates").ParseGlob("templates/html/*.html"))
 var jsTemplates = template.Must(template.New("jsTemplates").ParseGlob("templates/js/*.js"))
 
-var wc = world.New(width, height, 10000)
+var wc = world.New(width, height, 1000, 5)
 
 func or500(w http.ResponseWriter, err error) {
 	if err != nil {
@@ -26,10 +26,12 @@ func or500(w http.ResponseWriter, err error) {
 }
 
 func index(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=UTF-8")
 	or500(w, htmlTemplates.ExecuteTemplate(w, "index.html", nil))
 }
 
 func js(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/javascript; charset=UTF-8")
 	or500(w, jsTemplates.ExecuteTemplate(w, "jquery-1.8.1.min.js", nil))
 	or500(w, jsTemplates.ExecuteTemplate(w, "murmurhash3_gc.js", nil))
 	or500(w, jsTemplates.ExecuteTemplate(w, "app.js", map[string]interface{}{
@@ -39,10 +41,10 @@ func js(w http.ResponseWriter, r *http.Request) {
 }
 
 func wsView(ws *websocket.Conn) {
+	wc.Subscribe(func(ev interface{}) error {
+		return websocket.JSON.Send(ws, ev)
+	})
 	if err := websocket.JSON.Send(ws, wc.State()); err == nil {
-		wc.Subscribe(func(ev interface{}) error {
-			return websocket.JSON.Send(ws, ev)
-		})
 		var x interface{}
 		for {
 			if err := websocket.JSON.Receive(ws, &x); err != nil {

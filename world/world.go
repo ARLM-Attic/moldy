@@ -67,14 +67,17 @@ func (self *mold) size() uint16 {
 func (self *mold) set(p pos) {
 	if _, found := self.Bits[p]; !found {
 		self.Bits[p] = true
-		self.threatened[p] = 0
+		var threat uint8
 		p.eachNeighbour(self.world.Dimensions, func(p2 pos) bool {
 			self.power[p2]++
-			if self.world.owner(p) != self.Name {
-				self.threatened[p]++
+			if owner, found := self.world.owner(p2); found && owner != self.Name {
+				threat++
 			}
 			return false
 		})
+		if threat > 0 {
+			self.threatened[p] = threat
+		}
 		self.world.set(p, self.Name)
 		if self.world.hasSpace(p) {
 			self.roomy[p] = true
@@ -133,7 +136,17 @@ func (self *mold) get(p pos) bool {
 	return self.Bits[p]
 }
 
-func (self *mold) grow(delta *Delta) {
+func (self *mold) shrink(delta *Delta) {
+	for bit, threat := range self.threatened {
+		if self.power[bit] < threat {
+			delta.Removed[bit] = self.Name
+			self.unset(bit)
+		}
+	}
+}
+
+func (self *mold) grow(delta *Delta, k float32) {
+	num := int(k * float32(self.world.MoldGrowth))
 	for bit, _ := range self.roomy {
 		bit.eachNeighbour(self.world.Dimensions, func(neigh pos) bool {
 			if !self.world.hasMold(neigh) {
@@ -143,7 +156,9 @@ func (self *mold) grow(delta *Delta) {
 			}
 			return false
 		})
-		break
+		if num--; num < 1 {
+			break
+		}
 	}
 }
 
@@ -151,13 +166,14 @@ type world struct {
 	Dimensions  pos
 	Molds       map[string]*mold
 	MaxMoldSize uint16
+	MoldGrowth  uint8
 	neighbours  map[pos]uint8
 	moldBits    map[pos]string
 	cmd         CmdChan
 	subscribers map[*Subscriber]bool
 }
 
-func New(width, height, maxMoldSize uint16) CmdChan {
+func New(width, height, maxMoldSize uint16, moldGrowth uint8) CmdChan {
 	w := &world{
 		Molds:       make(map[string]*mold),
 		Dimensions:  pos{width, height},
@@ -166,8 +182,9 @@ func New(width, height, maxMoldSize uint16) CmdChan {
 		moldBits:    make(map[pos]string),
 		cmd:         make(CmdChan),
 		subscribers: make(map[*Subscriber]bool),
+		MoldGrowth:  moldGrowth,
 	}
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 10; i++ {
 		w.newMold(fmt.Sprintf("test%v", i))
 	}
 	go w.mainLoop()
@@ -178,8 +195,9 @@ func (self *world) hasSpace(p pos) bool {
 	return self.neighbours[p] < 8
 }
 
-func (self *world) owner(p pos) string {
-	return self.moldBits[p]
+func (self *world) owner(p pos) (result string, found bool) {
+	result, found = self.moldBits[p]
+	return
 }
 
 func (self *world) set(p pos, name string) {
@@ -253,10 +271,14 @@ func (self *world) growMolds(delta *Delta) {
 	var diff uint16
 	for _, mold := range self.Molds {
 		if diff = self.MaxMoldSize - mold.size(); diff > 0 {
-			if rand.Float32() < float32(diff)/float32(self.MaxMoldSize) {
-				mold.grow(delta)
-			}
+			mold.grow(delta, float32(diff)/float32(self.MaxMoldSize))
 		}
+	}
+}
+
+func (self *world) shrinkMolds(delta *Delta) {
+	for _, mold := range self.Molds {
+		mold.shrink(delta)
 	}
 }
 
@@ -275,6 +297,7 @@ func (self *world) tick() {
 		Removed: make(posStringMap),
 	}
 	self.growMolds(delta)
+	self.shrinkMolds(delta)
 	self.emit(delta)
 }
 
