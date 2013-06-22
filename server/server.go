@@ -16,7 +16,7 @@ const (
 var htmlTemplates = template.Must(template.New("htmlTemplates").ParseGlob("templates/html/*.html"))
 var jsTemplates = template.Must(template.New("jsTemplates").ParseGlob("templates/js/*.js"))
 
-var wc = world.New(width, height, 1000)
+var wc = world.New(width, height, 10000)
 
 func or500(w http.ResponseWriter, err error) {
 	if err != nil {
