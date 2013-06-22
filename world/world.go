@@ -134,7 +134,7 @@ func New(width, height, maxMoldSize uint16) CmdChan {
 		cmd:         make(CmdChan),
 		subscribers: make(map[*Subscriber]bool),
 	}
-	for i := 0; i < 200; i++ {
+	for i := 0; i < 10; i++ {
 		w.newMold(fmt.Sprintf("test%v", i))
 	}
 	go w.mainLoop()
