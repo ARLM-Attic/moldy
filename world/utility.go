@@ -32,6 +32,16 @@ func (self pos) eachNeighbour(dim pos, f func(p pos) bool) {
 	return
 }
 
+type posUint16Map map[pos]uint16
+
+func (self posUint16Map) MarshalJSON() (result []byte, err error) {
+	m := make(map[string]uint16)
+	for p, n := range self {
+		m[fmt.Sprintf("%v-%v", p.X, p.Y)] = n
+	}
+	return json.Marshal(m)
+}
+
 type posStringMap map[pos]string
 
 func (self posStringMap) MarshalJSON() (result []byte, err error) {

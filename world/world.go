@@ -10,46 +10,7 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-type Delta struct {
-	Created posStringMap
-	Removed posStringMap
-}
-
 type Subscriber func(ev interface{}) error
-
-type CmdChan chan cmd
-
-func (self CmdChan) send(c cmd) interface{} {
-	c.ret = make(chan interface{})
-	self <- c
-	return <-c.ret
-}
-
-func (self CmdChan) State() *world {
-	return self.send(cmd{
-		typ: cmdGetState,
-	}).(*world)
-}
-
-func (self CmdChan) Subscribe(s Subscriber) {
-	self.send(cmd{
-		typ: cmdSubscribe,
-		arg: s,
-	})
-}
-
-type cmdType int
-
-const (
-	cmdGetState = iota
-	cmdSubscribe
-)
-
-type cmd struct {
-	typ cmdType
-	ret chan interface{}
-	arg interface{}
-}
 
 type mold struct {
 	world      *world
@@ -58,6 +19,11 @@ type mold struct {
 	roomy      posBoolMap
 	threatened map[pos]uint8
 	power      map[pos]uint8
+	targets    posUint16Map
+}
+
+func (self *mold) addTarget(precision uint16, p pos) {
+	self.targets[p] = precision
 }
 
 func (self *mold) size() uint16 {
@@ -184,9 +150,6 @@ func New(width, height, maxMoldSize uint16, moldGrowth uint8) CmdChan {
 		subscribers: make(map[*Subscriber]bool),
 		MoldGrowth:  moldGrowth,
 	}
-	for i := 0; i < 10; i++ {
-		w.newMold(fmt.Sprintf("test%v", i))
-	}
 	go w.mainLoop()
 	return w.cmd
 }
@@ -249,10 +212,14 @@ func (self *world) hasMold(p pos) (result bool) {
 	return
 }
 
+func (self *world) rand() pos {
+	return pos{uint16(rand.Int()) % self.Dimensions.X, uint16(rand.Int()) % self.Dimensions.Y}
+}
+
 func (self *world) newMold(name string) {
-	p := pos{uint16(rand.Int()) % self.Dimensions.X, uint16(rand.Int()) % self.Dimensions.Y}
+	p := self.rand()
 	for self.hasMold(p) {
-		p = pos{uint16(rand.Int()) % self.Dimensions.X, uint16(rand.Int()) % self.Dimensions.Y}
+		p = self.rand()
 	}
 	m := &mold{
 		world:      self,
@@ -261,6 +228,7 @@ func (self *world) newMold(name string) {
 		roomy:      make(posBoolMap),
 		threatened: make(map[pos]uint8),
 		power:      make(map[pos]uint8),
+		targets:    make(posUint16Map),
 	}
 	m.set(p)
 	self.Molds[name] = m
@@ -268,10 +236,10 @@ func (self *world) newMold(name string) {
 }
 
 func (self *world) growMolds(delta *Delta) {
-	var diff uint16
+	var k float32
 	for _, mold := range self.Molds {
-		if diff = self.MaxMoldSize - mold.size(); diff > 0 {
-			mold.grow(delta, float32(diff)/float32(self.MaxMoldSize))
+		if k = float32(self.MaxMoldSize-mold.size()) / float32(self.MaxMoldSize); k > rand.Float32() {
+			mold.grow(delta, k)
 		}
 	}
 }
@@ -291,6 +259,10 @@ func (self *world) emit(ev interface{}) {
 	}
 }
 
+func (self *world) addTarget(name string, precision uint16, p pos) {
+	self.Molds[name].addTarget(precision, p)
+}
+
 func (self *world) tick() {
 	delta := &Delta{
 		Created: make(posStringMap),
@@ -308,6 +280,14 @@ func (self *world) handleCommand(c cmd) {
 	case cmdSubscribe:
 		sub := c.arg.(Subscriber)
 		self.subscribers[&sub] = true
+		c.ret <- nil
+	case cmdNewMold:
+		name := c.arg.(string)
+		self.newMold(name)
+		c.ret <- nil
+	case cmdAddTarget:
+		t := c.arg.(target)
+		self.addTarget(t.name, uint16(t.precision), t.pos)
 		c.ret <- nil
 	}
 }
