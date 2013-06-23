@@ -32,14 +32,52 @@ func (self pos) eachNeighbour(dim pos, f func(p pos) bool) {
 	return
 }
 
-type posUint16Map map[pos]uint16
+func (self pos) distance(p pos) int64 {
+	dx := int64(self.X - p.X)
+	dy := int64(self.Y - p.Y)
+	return dx*dx + dy*dy
+}
 
-func (self posUint16Map) MarshalJSON() (result []byte, err error) {
-	m := make(map[string]uint16)
-	for p, n := range self {
-		m[fmt.Sprintf("%v-%v", p.X, p.Y)] = n
+func (self pos) eachNeighbourTowards(dim pos, target pos, f func(p pos) bool) {
+	nx := 0
+	ny := 0
+	np := pos{}
+	minXd := -1
+	maxXd := 1
+	minYd := -1
+	maxYd := 1
+	if target.X > self.X {
+		minXd = 0
+	} else if target.X < self.X {
+		maxXd = 0
+	} else {
+		minXd = 0
+		maxXd = 0
 	}
-	return json.Marshal(m)
+	if target.Y > self.Y {
+		minYd = 0
+	} else if target.Y < self.Y {
+		maxYd = 0
+	} else {
+		minYd = 0
+		maxYd = 0
+	}
+	for xd := minXd; xd < maxXd+1; xd++ {
+		for yd := minYd; yd < maxYd+1; yd++ {
+			if xd != 0 || yd != 0 {
+				nx = int(self.X) + xd
+				ny = int(self.Y) + yd
+				if nx >= 0 && nx < int(dim.X) && ny >= 0 && ny < int(dim.Y) {
+					np.X = uint16(nx)
+					np.Y = uint16(ny)
+					if f(np) {
+						return
+					}
+				}
+			}
+		}
+	}
+	return
 }
 
 type posStringMap map[pos]string

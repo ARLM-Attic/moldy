@@ -19,7 +19,7 @@ type mold struct {
 	roomy      posBoolMap
 	threatened map[pos]uint8
 	power      map[pos]uint8
-	targets    posUint16Map
+	targets    map[pos]uint16
 }
 
 func (self *mold) addTarget(precision uint16, p pos) {
@@ -128,6 +128,59 @@ func (self *mold) grow(delta *Delta, k float32) {
 	}
 }
 
+func (self *mold) moveTowards(delta *Delta, target pos, precision uint16) {
+	var bestPos *pos
+	var bestDistance int64
+	possible := false
+	for p, _ := range self.roomy {
+		possible = false
+		p.eachNeighbourTowards(self.world.Dimensions, target, func(p2 pos) bool {
+			if !self.world.hasMold(p2) {
+				possible = true
+				return true
+			}
+			return false
+		})
+		if possible {
+			if dist := p.distance(target); bestPos == nil || dist < bestDistance {
+				cpy := p
+				bestPos = &cpy
+				bestDistance = dist
+			}
+			precision--
+		}
+		if precision == 0 {
+			break
+		}
+	}
+	if bestPos != nil {
+		alts := make([]pos, 0, 8)
+		(*bestPos).eachNeighbourTowards(self.world.Dimensions, target, func(p pos) bool {
+			if !self.world.hasMold(p) {
+				alts = append(alts, p)
+			}
+			return false
+		})
+		if len(alts) > 0 {
+			p := alts[rand.Int()%len(alts)]
+			delta.Created[p] = self.Name
+			self.set(p)
+			for p, _ := range self.roomy {
+				self.unset(p)
+				break
+			}
+		}
+	} else {
+		fmt.Println("failed moving", self.Name, "towards", target)
+	}
+}
+
+func (self *mold) move(delta *Delta) {
+	for target, precision := range self.targets {
+		self.moveTowards(delta, target, precision)
+	}
+}
+
 type world struct {
 	Dimensions  pos
 	Molds       map[string]*mold
@@ -228,7 +281,7 @@ func (self *world) newMold(name string) {
 		roomy:      make(posBoolMap),
 		threatened: make(map[pos]uint8),
 		power:      make(map[pos]uint8),
-		targets:    make(posUint16Map),
+		targets:    make(map[pos]uint16),
 	}
 	m.set(p)
 	self.Molds[name] = m
@@ -237,9 +290,12 @@ func (self *world) newMold(name string) {
 
 func (self *world) growMolds(delta *Delta) {
 	var k float32
+	var diff int64
 	for _, mold := range self.Molds {
-		if k = float32(self.MaxMoldSize-mold.size()) / float32(self.MaxMoldSize); k > rand.Float32() {
-			mold.grow(delta, k)
+		if diff = int64(self.MaxMoldSize) - int64(mold.size()); diff > 0 {
+			if k = float32(diff) / float32(self.MaxMoldSize); k > rand.Float32() {
+				mold.grow(delta, k)
+			}
 		}
 	}
 }
@@ -247,6 +303,12 @@ func (self *world) growMolds(delta *Delta) {
 func (self *world) shrinkMolds(delta *Delta) {
 	for _, mold := range self.Molds {
 		mold.shrink(delta)
+	}
+}
+
+func (self *world) moveMolds(delta *Delta) {
+	for _, mold := range self.Molds {
+		mold.move(delta)
 	}
 }
 
@@ -270,6 +332,7 @@ func (self *world) tick() {
 	}
 	self.growMolds(delta)
 	self.shrinkMolds(delta)
+	self.moveMolds(delta)
 	self.emit(delta)
 }
 
