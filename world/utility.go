@@ -34,8 +34,8 @@ func (self pos) eachNeighbour(dim pos, f func(p pos) bool) {
 }
 
 func (self pos) distance(p pos) int64 {
-	dx := int64(self.X - p.X)
-	dy := int64(self.Y - p.Y)
+	dx := int64(self.X) - int64(p.X)
+	dy := int64(self.Y) - int64(p.Y)
 	return dx*dx + dy*dy
 }
 

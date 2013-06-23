@@ -4,7 +4,7 @@ import (
 	"code.google.com/p/go.net/websocket"
 	"fmt"
 	"github.com/zond/moldy/world"
-	//	"math/rand"
+	"math/rand"
 	"net/http"
 	"text/template"
 )
@@ -59,10 +59,11 @@ func wsView(ws *websocket.Conn) {
 }
 
 func main() {
-	wc = world.New(width, height, 1000, 10, 30)
-	for i := 0; i < 20; i++ {
+	wc = world.New(width, height, 5000, 20, 1)
+	for i := 0; i < 3; i++ {
 		wc.NewMold(fmt.Sprintf("test%v", i))
-		//	wc.AddTarget(fmt.Sprintf("test%v", i), 1, rand.Int()%width, rand.Int()%height)
+		wc.AddTarget(fmt.Sprintf("test%v", i), 1, rand.Int()%width, rand.Int()%height)
+		wc.AddTarget(fmt.Sprintf("test%v", i), 10, rand.Int()%width, rand.Int()%height)
 	}
 
 	http.HandleFunc("/js", js)

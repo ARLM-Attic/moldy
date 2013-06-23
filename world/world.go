@@ -18,7 +18,6 @@ type mold struct {
 	Bits       posBoolMap
 	roomy      posBoolMap
 	threatened map[pos]uint8
-	power      map[pos]uint8
 	Targets    posUint16Map
 }
 
@@ -35,7 +34,6 @@ func (self *mold) set(p pos) {
 		self.Bits[p] = true
 		var threat uint8
 		p.eachNeighbour(self.world.Dimensions, func(p2 pos) bool {
-			self.power[p2]++
 			if owner, found := self.world.owner(p2); found && owner != self.Name {
 				threat++
 			}
@@ -79,17 +77,9 @@ func (self *mold) secure(p pos) {
 	}
 }
 
-func (self *mold) pow(p pos) uint8 {
-	return self.power[p]
-}
-
 func (self *mold) unset(p pos) {
 	if _, found := self.Bits[p]; found {
 		delete(self.Bits, p)
-		p.eachNeighbour(self.world.Dimensions, func(p2 pos) bool {
-			self.power[p2]--
-			return false
-		})
 		delete(self.roomy, p)
 		delete(self.threatened, p)
 		self.world.unset(p)
@@ -104,7 +94,7 @@ func (self *mold) get(p pos) bool {
 
 func (self *mold) shrink(delta *Delta) {
 	for bit, threat := range self.threatened {
-		if self.power[bit] < threat {
+		if threat > 3 {
 			delta.Removed[bit] = self.Name
 			self.unset(bit)
 		}
@@ -133,7 +123,7 @@ func (self *mold) moveTowards(delta *Delta, target pos, precision uint16) {
 	var bestPos *pos
 	var bestDistance int64
 	var tries uint16
-	for n := 0; n < int(self.world.MoldMovement); n++ {
+	for n := 0; n < int(self.world.MoldMovement)+int(uint16(100)/precision); n++ {
 		bestPos = nil
 		bestDistance = 0
 		tries = precision
@@ -155,13 +145,9 @@ func (self *mold) moveTowards(delta *Delta, target pos, precision uint16) {
 			delta.Created[*bestPos] = self.Name
 			self.set(*bestPos)
 			for p, _ := range self.roomy {
-				if p2 := p.neighbourTowards(self.world.Dimensions, target); p2 != nil {
-					if self.world.hasMold(*p2) {
-						delta.Removed[p] = self.Name
-						self.unset(p)
-						break
-					}
-				}
+				delta.Removed[p] = self.Name
+				self.unset(p)
+				break
 			}
 		}
 	}
@@ -274,7 +260,6 @@ func (self *world) newMold(name string) {
 		Name:       name,
 		roomy:      make(posBoolMap),
 		threatened: make(map[pos]uint8),
-		power:      make(map[pos]uint8),
 		Targets:    make(posUint16Map),
 	}
 	m.set(p)
