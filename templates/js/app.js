@@ -21,6 +21,14 @@ function unset(ctx, x, y) {
 	ctx.fillRect(x, y, 1, 1);
 };
 
+function dot(ctx, x, y, col) {
+	ctx.fillStyle = col;
+	ctx.beginPath();
+	ctx.arc(x, y, 3, 0, Math.PI * 2.0, true);
+	ctx.closePath();
+	ctx.fill();
+};
+
 $(function() {
 	var canvas = document.getElementById("board");
 	canvas.width = {{.width}};
@@ -53,6 +61,13 @@ $(function() {
 			  for (var pos in obj.Molds[mold].Bits) {
 					var xy = pos.split("-");
 					set(ctx, parseInt(xy[0]), parseInt(xy[1]), mold.colorize());
+				}
+			}
+			for (var mold in obj.Molds) {
+			  for (var targ in obj.Molds[mold].Targets) {
+				  console.log('target', targ);
+				  var xy = targ.split("-");
+					dot(ctx, parseInt(xy[0]), parseInt(xy[1]), mold.colorize());
 				}
 			}
 		}

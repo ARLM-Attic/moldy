@@ -19,11 +19,11 @@ type mold struct {
 	roomy      posBoolMap
 	threatened map[pos]uint8
 	power      map[pos]uint8
-	targets    map[pos]uint16
+	Targets    posUint16Map
 }
 
 func (self *mold) addTarget(precision uint16, p pos) {
-	self.targets[p] = precision
+	self.Targets[p] = precision
 }
 
 func (self *mold) size() uint16 {
@@ -118,11 +118,12 @@ func (self *mold) grow(delta *Delta, k float32) {
 			if !self.world.hasMold(neigh) {
 				delta.Created[neigh] = self.Name
 				self.set(neigh)
+				num--
 				return true
 			}
 			return false
 		})
-		if num--; num < 1 {
+		if num < 1 {
 			break
 		}
 	}
@@ -131,77 +132,70 @@ func (self *mold) grow(delta *Delta, k float32) {
 func (self *mold) moveTowards(delta *Delta, target pos, precision uint16) {
 	var bestPos *pos
 	var bestDistance int64
-	possible := false
-	for p, _ := range self.roomy {
-		possible = false
-		p.eachNeighbourTowards(self.world.Dimensions, target, func(p2 pos) bool {
-			if !self.world.hasMold(p2) {
-				possible = true
-				return true
+	var tries uint16
+	for n := 0; n < int(self.world.MoldMovement); n++ {
+		bestPos = nil
+		bestDistance = 0
+		tries = precision
+		for p, _ := range self.roomy {
+			if p2 := p.neighbourTowards(self.world.Dimensions, target); p2 != nil {
+				if !self.world.hasMold(*p2) {
+					if dist := p2.distance(target); bestPos == nil || dist < bestDistance {
+						bestPos = p2
+						bestDistance = dist
+					}
+					tries--
+				}
+				if tries < 1 {
+					break
+				}
 			}
-			return false
-		})
-		if possible {
-			if dist := p.distance(target); bestPos == nil || dist < bestDistance {
-				cpy := p
-				bestPos = &cpy
-				bestDistance = dist
-			}
-			precision--
 		}
-		if precision == 0 {
-			break
-		}
-	}
-	if bestPos != nil {
-		alts := make([]pos, 0, 8)
-		(*bestPos).eachNeighbourTowards(self.world.Dimensions, target, func(p pos) bool {
-			if !self.world.hasMold(p) {
-				alts = append(alts, p)
-			}
-			return false
-		})
-		if len(alts) > 0 {
-			p := alts[rand.Int()%len(alts)]
-			delta.Created[p] = self.Name
-			self.set(p)
+		if bestPos != nil {
+			delta.Created[*bestPos] = self.Name
+			self.set(*bestPos)
 			for p, _ := range self.roomy {
-				self.unset(p)
-				break
+				if p2 := p.neighbourTowards(self.world.Dimensions, target); p2 != nil {
+					if self.world.hasMold(*p2) {
+						delta.Removed[p] = self.Name
+						self.unset(p)
+						break
+					}
+				}
 			}
 		}
-	} else {
-		fmt.Println("failed moving", self.Name, "towards", target)
 	}
 }
 
 func (self *mold) move(delta *Delta) {
-	for target, precision := range self.targets {
+	for target, precision := range self.Targets {
 		self.moveTowards(delta, target, precision)
 	}
 }
 
 type world struct {
-	Dimensions  pos
-	Molds       map[string]*mold
-	MaxMoldSize uint16
-	MoldGrowth  uint8
-	neighbours  map[pos]uint8
-	moldBits    map[pos]string
-	cmd         CmdChan
-	subscribers map[*Subscriber]bool
+	Dimensions   pos
+	Molds        map[string]*mold
+	MaxMoldSize  uint16
+	MoldGrowth   uint8
+	MoldMovement uint8
+	neighbours   map[pos]uint8
+	moldBits     map[pos]string
+	cmd          CmdChan
+	subscribers  map[*Subscriber]bool
 }
 
-func New(width, height, maxMoldSize uint16, moldGrowth uint8) CmdChan {
+func New(width, height, maxMoldSize uint16, moldGrowth, moldMovement uint8) CmdChan {
 	w := &world{
-		Molds:       make(map[string]*mold),
-		Dimensions:  pos{width, height},
-		MaxMoldSize: maxMoldSize,
-		neighbours:  make(map[pos]uint8),
-		moldBits:    make(map[pos]string),
-		cmd:         make(CmdChan),
-		subscribers: make(map[*Subscriber]bool),
-		MoldGrowth:  moldGrowth,
+		Molds:        make(map[string]*mold),
+		Dimensions:   pos{width, height},
+		MaxMoldSize:  maxMoldSize,
+		neighbours:   make(map[pos]uint8),
+		moldBits:     make(map[pos]string),
+		cmd:          make(CmdChan),
+		subscribers:  make(map[*Subscriber]bool),
+		MoldGrowth:   moldGrowth,
+		MoldMovement: moldMovement,
 	}
 	go w.mainLoop()
 	return w.cmd
@@ -281,7 +275,7 @@ func (self *world) newMold(name string) {
 		roomy:      make(posBoolMap),
 		threatened: make(map[pos]uint8),
 		power:      make(map[pos]uint8),
-		targets:    make(map[pos]uint16),
+		Targets:    make(posUint16Map),
 	}
 	m.set(p)
 	self.Molds[name] = m

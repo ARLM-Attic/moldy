@@ -3,6 +3,7 @@ package world
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 )
 
 type pos struct {
@@ -38,46 +39,36 @@ func (self pos) distance(p pos) int64 {
 	return dx*dx + dy*dy
 }
 
-func (self pos) eachNeighbourTowards(dim pos, target pos, f func(p pos) bool) {
-	nx := 0
-	ny := 0
-	np := pos{}
-	minXd := -1
-	maxXd := 1
-	minYd := -1
-	maxYd := 1
-	if target.X > self.X {
-		minXd = 0
-	} else if target.X < self.X {
-		maxXd = 0
-	} else {
-		minXd = 0
-		maxXd = 0
+func (self pos) neighbourTowards(dim pos, target pos) (result *pos) {
+	if target == self {
+		return nil
 	}
-	if target.Y > self.Y {
-		minYd = 0
-	} else if target.Y < self.Y {
-		maxYd = 0
-	} else {
-		minYd = 0
-		maxYd = 0
+	dx := float32(target.X) - float32(self.X)
+	dy := float32(target.Y) - float32(self.Y)
+	mx := 1
+	my := 1
+	if dx < 0 {
+		mx = -1
 	}
-	for xd := minXd; xd < maxXd+1; xd++ {
-		for yd := minYd; yd < maxYd+1; yd++ {
-			if xd != 0 || yd != 0 {
-				nx = int(self.X) + xd
-				ny = int(self.Y) + yd
-				if nx >= 0 && nx < int(dim.X) && ny >= 0 && ny < int(dim.Y) {
-					np.X = uint16(nx)
-					np.Y = uint16(ny)
-					if f(np) {
-						return
-					}
-				}
-			}
-		}
+	if dy < 0 {
+		my = -1
 	}
-	return
+	dx *= float32(mx)
+	dy *= float32(my)
+	if rand.Float32() < dx/(dx+dy) {
+		return &pos{uint16(int(self.X) + mx), self.Y}
+	}
+	return &pos{self.X, uint16(int(self.Y) + my)}
+}
+
+type posUint16Map map[pos]uint16
+
+func (self posUint16Map) MarshalJSON() (result []byte, err error) {
+	m := make(map[string]uint16)
+	for p, n := range self {
+		m[fmt.Sprintf("%v-%v", p.X, p.Y)] = n
+	}
+	return json.Marshal(m)
 }
 
 type posStringMap map[pos]string
