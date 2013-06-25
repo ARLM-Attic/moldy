@@ -123,7 +123,7 @@ func (self *mold) moveTowards(delta *Delta, target pos, precision uint16) {
 	var bestPos *pos
 	var bestDistance int64
 	var tries uint16
-	for n := 0; n < int(self.world.MoldMovement)+int(uint16(100)/precision); n++ {
+	for n := 0; n < int(self.world.MoldMovement); n++ {
 		bestPos = nil
 		bestDistance = 0
 		tries = precision
