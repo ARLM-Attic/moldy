@@ -7,6 +7,7 @@ const (
 	cmdSubscribe
 	cmdNewMold
 	cmdAddTarget
+	cmdClearTargets
 )
 
 type cmd struct {
@@ -16,8 +17,10 @@ type cmd struct {
 }
 
 type Delta struct {
-	Created posStringMap
-	Removed posStringMap
+	Created        posStringMap
+	Removed        posStringMap
+	CreatedTargets map[string]posUint16Map
+	RemovedTargets map[string]posUint16Map
 }
 
 type target struct {
@@ -42,6 +45,13 @@ func (self CmdChan) AddTarget(name string, precision, x, y int) {
 			name:      name,
 			precision: precision,
 		},
+	})
+}
+
+func (self CmdChan) ClearTargets(name string) {
+	self.send(cmd{
+		typ: cmdClearTargets,
+		arg: name,
 	})
 }
 

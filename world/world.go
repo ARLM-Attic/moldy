@@ -2,6 +2,7 @@ package world
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"time"
 )
@@ -19,6 +20,12 @@ type mold struct {
 	roomy      posBoolMap
 	threatened map[pos]uint8
 	Targets    posUint16Map
+}
+
+func (self *mold) clearTargets() (result posUint16Map) {
+	result = self.Targets
+	self.Targets = make(posUint16Map)
+	return
 }
 
 func (self *mold) addTarget(precision uint16, p pos) {
@@ -147,8 +154,13 @@ func (self *mold) moveTowards(delta *Delta, target pos, precision uint16) {
 			bestDistance = 0
 			bestPos = nil
 			tries = self.world.MaxMoldSize / 100
+			var dist int64
 			for p, _ := range self.roomy {
-				if dist := p.distance(target); bestPos == nil || dist > bestDistance {
+				dist = 0
+				for targ, _ := range self.Targets {
+					dist += int64(math.Log(float64(p.distance(targ))))
+				}
+				if bestPos == nil || dist > bestDistance {
 					cpy := p
 					bestPos = &cpy
 					bestDistance = dist
@@ -310,8 +322,25 @@ func (self *world) emit(ev interface{}) {
 	}
 }
 
+func (self *world) clearTargets(name string) {
+	delta := &Delta{
+		RemovedTargets: map[string]posUint16Map{
+			name: self.Molds[name].clearTargets(),
+		},
+	}
+	self.emit(delta)
+}
+
 func (self *world) addTarget(name string, precision uint16, p pos) {
 	self.Molds[name].addTarget(precision, p)
+	delta := &Delta{
+		CreatedTargets: map[string]posUint16Map{
+			name: posUint16Map{
+				p: precision,
+			},
+		},
+	}
+	self.emit(delta)
 }
 
 func (self *world) tick() {
@@ -340,6 +369,10 @@ func (self *world) handleCommand(c cmd) {
 	case cmdAddTarget:
 		t := c.arg.(target)
 		self.addTarget(t.name, uint16(t.precision), t.pos)
+		c.ret <- nil
+	case cmdClearTargets:
+		name := c.arg.(string)
+		self.clearTargets(name)
 		c.ret <- nil
 	}
 }

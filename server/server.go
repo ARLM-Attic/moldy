@@ -4,7 +4,6 @@ import (
 	"code.google.com/p/go.net/websocket"
 	"fmt"
 	"github.com/zond/moldy/world"
-	"math/rand"
 	"net/http"
 	"text/template"
 )
@@ -41,16 +40,29 @@ func js(w http.ResponseWriter, r *http.Request) {
 	}))
 }
 
+type Target struct {
+	Op        string `json:"Op,omitempty"`
+	Target    []int  `json:"Target,omitempty"`
+	Name      string `json:"Name,omitempty"`
+	Precision int    `json:"Precision,omitempty"`
+}
+
 func wsView(ws *websocket.Conn) {
 	wc.Subscribe(func(ev interface{}) error {
 		return websocket.JSON.Send(ws, ev)
 	})
 	if err := websocket.JSON.Send(ws, wc.State()); err == nil {
-		var x interface{}
+		var targ Target
 		for {
-			if err := websocket.JSON.Receive(ws, &x); err != nil {
+			targ = Target{}
+			if err := websocket.JSON.Receive(ws, &targ); err != nil {
 				fmt.Println(err)
 				break
+			}
+			if targ.Target == nil {
+				wc.ClearTargets(targ.Name)
+			} else {
+				wc.AddTarget(targ.Name, targ.Precision, targ.Target[0], targ.Target[1])
 			}
 		}
 	} else {
@@ -59,11 +71,9 @@ func wsView(ws *websocket.Conn) {
 }
 
 func main() {
-	wc = world.New(width, height, 1000, 1, 1)
+	wc = world.New(width, height, 5000, 1, 1)
 	for i := 0; i < 3; i++ {
 		wc.NewMold(fmt.Sprintf("test%v", i))
-		wc.AddTarget(fmt.Sprintf("test%v", i), 1, rand.Int()%width, rand.Int()%height)
-		wc.AddTarget(fmt.Sprintf("test%v", i), 1, rand.Int()%width, rand.Int()%height)
 	}
 
 	http.HandleFunc("/js", js)

@@ -1,4 +1,4 @@
 moldy
 =====
 
-A multiplayer programming challenge
+A multiplayer programming challenge. Fungusfight!
