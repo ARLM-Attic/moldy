@@ -130,7 +130,7 @@ func (self *mold) moveTowards(delta *Delta, target pos, precision uint16) {
 		for p, _ := range self.roomy {
 			if p2 := p.neighbourTowards(self.world.Dimensions, target); p2 != nil {
 				if !self.world.hasMold(*p2) {
-					if dist := p2.distance(target); bestPos == nil || dist < bestDistance {
+					if dist := p.distance(target); bestPos == nil || dist < bestDistance {
 						bestPos = p2
 						bestDistance = dist
 					}
@@ -144,11 +144,21 @@ func (self *mold) moveTowards(delta *Delta, target pos, precision uint16) {
 		if bestPos != nil {
 			delta.Created[*bestPos] = self.Name
 			self.set(*bestPos)
+			bestDistance = 0
+			bestPos = nil
+			tries = self.world.MaxMoldSize / 100
 			for p, _ := range self.roomy {
-				delta.Removed[p] = self.Name
-				self.unset(p)
-				break
+				if dist := p.distance(target); bestPos == nil || dist > bestDistance {
+					cpy := p
+					bestPos = &cpy
+					bestDistance = dist
+				}
+				if tries--; tries < 1 {
+					break
+				}
 			}
+			delta.Removed[*bestPos] = self.Name
+			self.unset(*bestPos)
 		}
 	}
 }
