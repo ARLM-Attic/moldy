@@ -72,6 +72,7 @@ $(function() {
 			var owner = owners[pos];
 			if (owner != null) {
 				mold = owner;
+				$('#state').text(owner);
 			}
 		};
 		canvas.onmouseup = function(ev) {
@@ -103,10 +104,12 @@ $(function() {
 		var obj = JSON.parse(ev.data);
 		if (obj.Molds) {
 		  for (var mold in obj.Molds) {
-			  for (var pos in obj.Molds[mold].Bits) {
-				  owners[pos] = mold;
-					var xy = pos.split("-");
-					set(ctx, parseInt(xy[0]), parseInt(xy[1]), mold.colorize());
+			  for (var i = 0; i < obj.Molds[mold].Bits.length; i++) {
+				  var p = obj.Molds[mold].Bits[i];
+					if (p != null) {
+						owners['' + p.X + '-' + p.Y] = mold;
+						set(ctx, p.X, p.Y, mold.colorize());
+					}
 				}
 			}
 			for (var mold in obj.Molds) {

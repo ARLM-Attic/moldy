@@ -41,7 +41,7 @@ func (self CmdChan) AddTarget(name string, precision, x, y int) {
 	self.send(cmd{
 		typ: cmdAddTarget,
 		arg: target{
-			pos:       pos{uint16(x), uint16(y)},
+			pos:       pos{x, y},
 			name:      name,
 			precision: precision,
 		},

@@ -8,11 +8,6 @@ import (
 	"text/template"
 )
 
-const (
-	width  = 600
-	height = 400
-)
-
 var htmlTemplates = template.Must(template.New("htmlTemplates").ParseGlob("templates/html/*.html"))
 var jsTemplates = template.Must(template.New("jsTemplates").ParseGlob("templates/js/*.js"))
 
@@ -35,8 +30,8 @@ func js(w http.ResponseWriter, r *http.Request) {
 	or500(w, jsTemplates.ExecuteTemplate(w, "jquery-1.8.1.min.js", nil))
 	or500(w, jsTemplates.ExecuteTemplate(w, "murmurhash3_gc.js", nil))
 	or500(w, jsTemplates.ExecuteTemplate(w, "app.js", map[string]interface{}{
-		"width":  width,
-		"height": height,
+		"width":  world.Width,
+		"height": world.Height,
 	}))
 }
 
@@ -71,7 +66,7 @@ func wsView(ws *websocket.Conn) {
 }
 
 func main() {
-	wc = world.New(width, height, 5000, 1, 1)
+	wc = world.New()
 	for i := 0; i < 3; i++ {
 		wc.NewMold(fmt.Sprintf("test%v", i))
 	}
